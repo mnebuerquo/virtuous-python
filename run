@@ -1,0 +1,126 @@
+#!/bin/sh
+
+# https://github.com/mnebuerquo/virtuous-python
+# Run a python script, and manage the virtualenv for me so I don't have to
+
+# Originally from this gist:
+# https://gist.github.com/mnebuerquo/4da76a007d18964dc3f7ce43e213b46f
+
+# Run: ./run app.py [--argument --other file --whatever]
+# Test: ./run --test [<--more-pytest-args-here>]
+# Lint: ./run --lint [<--more-flake8-args-here>]
+# Format: ./run --format [<--more-autopep8-args-here>]
+
+
+
+# die on errors
+set -e
+
+# set VER="3" for python3, or empty for 2.7
+#TODO: get a value for this from an external environment variable?
+# I don't want to support python<3 ever again
+VER="3"
+
+# everything is set up for the selected version
+PYTHON="python$VER"
+PIP="pip$VER"
+VIRTUAL="env${VER}"
+TESTENV="env${VER}_test"
+RUNLOG="run.log"
+
+# Do I have a .gitignore here yet?
+if [ ! -f ".gitignore" ]; then
+	# If not, download this file:
+	ignore="https://raw.githubusercontent.com/github/gitignore/master/Python.gitignore"
+	wget "${ignore}" 2>/dev/null || curl -O  "${ignore}"
+	mv "Python.gitignore" ".gitignore"
+	# Append some stuff here to ignore artifacts of this script:
+	echo "" >> ".gitignore"
+	echo "# mnebuerquo's run script artifacts:" >> ".gitignore"
+	echo "${VIRTUAL}/" >> ".gitignore"
+	echo "${TESTENV}/" >> ".gitignore"
+	echo "${RUNLOG}" >> ".gitignore"
+fi
+
+# We don't want an error if requirements.txt is not found.
+if [ ! -f requirements.txt ]; then
+	touch requirements.txt
+fi
+
+# these steps are done for the virtual env regardless
+create_env() {
+	if [ ! -d "$VIRTUAL" ]; then
+		virtualenv -p $PYTHON "$VIRTUAL" 2>&1 | tee -a "${RUNLOG}"
+	fi
+	. "$VIRTUAL/bin/activate"
+	# Always try to install, in case user edited requirements
+	$PIP install -r requirements.txt 2>&1 \
+		| tee -a "${RUNLOG}" \
+		| grep -v "Requirement already satisfied:" | cat
+	# Always freeze after install so user can see what is added
+	# Also, freeze to a different file so we don't overwrite user's
+	# requirements.txt
+	$PIP freeze > requirements.freeze
+}
+
+create_env_test() {
+	if [ ! -d "$TESTENV" ]; then
+		# When creating the virutalenv, show all pip install steps in the
+		# terminal, not just in log
+		virtualenv -p $PYTHON "$TESTENV" 2>&1 | tee -a "${RUNLOG}"
+	fi
+	. "$TESTENV/bin/activate"
+	$PIP install flake8 autopep8 pytest 2>&1 \
+		| tee -a "${RUNLOG}" \
+		| grep -v "Requirement already satisfied:" | cat
+	$PIP install -r requirements.txt 2>&1 \
+		| tee -a "${RUNLOG}" \
+		| grep -v "Requirement already satisfied:" | cat
+	. "$TESTENV/bin/activate"
+}
+
+# Export environment variables if they exist
+#TODO: This may not be necessary, since some people use dotenv
+set -a
+if [ -f .env ]; then
+	. .env
+fi
+set +a
+
+# Add current dir to python path
+#TODO: I don't remember why...
+CWD=$(pwd)
+export PYTHONPATH="$CWD:$PYTHONPATH"
+
+# Figure out what we're running and then run it.
+if [ "--clean" == $1 ]; then
+	# remove virtualenv directories
+	rm -rf "$TESTENV"
+	rm -rf "$VIRTUAL"
+elif [ "--lint" == "$1" ]; then
+	# Lint
+	shift
+	echo "$@"
+	create_env_test
+	. "$TESTENV/bin/activate"
+	flake8 \
+		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV}
+elif [ "--test" == "$1" ]; then
+	# Test
+	shift
+	create_env_test
+	. "$TESTENV/bin/activate"
+	pytest --doctest-modules "$@"
+elif [ "--format" == "$1" ]; then
+	# Reformat code
+	shift
+	create_env_test
+	. "$TESTENV/bin/activate"
+	autopep8 --verbose --in-place --recursive --aggressive \
+		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV} \
+		"$@"
+else
+	create_env
+	. "$VIRTUAL/bin/activate"
+	$PYTHON "${@:1}"
+fi
