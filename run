@@ -28,6 +28,11 @@ VIRTUAL="env${VER}"
 TESTENV="env${VER}_test"
 RUNLOG="run.log"
 
+if ! type "virtualenv" > /dev/null; then
+    echo "virtualenv is not installed on this machine!"
+    exit 1
+fi
+
 # Do I have a .gitignore here yet?
 if [ ! -f ".gitignore" ]; then
 	# If not, download this file:
@@ -52,7 +57,7 @@ create_env() {
 	if [ ! -d "$VIRTUAL" ]; then
 		virtualenv -p $PYTHON "$VIRTUAL" 2>&1 | tee -a "${RUNLOG}"
 	fi
-	. "$VIRTUAL/bin/activate"
+	. "./$VIRTUAL/bin/activate"
 	# Always try to install, in case user edited requirements
 	$PIP install -r requirements.txt 2>&1 \
 		| tee -a "${RUNLOG}" \
@@ -69,21 +74,21 @@ create_env_test() {
 		# terminal, not just in log
 		virtualenv -p $PYTHON "$TESTENV" 2>&1 | tee -a "${RUNLOG}"
 	fi
-	. "$TESTENV/bin/activate"
+	. "./$TESTENV/bin/activate"
 	$PIP install flake8 autopep8 pytest 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
 	$PIP install -r requirements.txt 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
-	. "$TESTENV/bin/activate"
+	. "./$TESTENV/bin/activate"
 }
 
 # Export environment variables if they exist
 #TODO: This may not be necessary, since some people use dotenv
 set -a
-if [ -f .env ]; then
-	. .env
+if [ -f "./.env" ]; then
+	. "./.env"
 fi
 set +a
 
@@ -93,34 +98,34 @@ CWD=$(pwd)
 export PYTHONPATH="$CWD:$PYTHONPATH"
 
 # Figure out what we're running and then run it.
-if [ "--clean" == $1 ]; then
+if [ "--clean" = "$1" ]; then
 	# remove virtualenv directories
 	rm -rf "$TESTENV"
 	rm -rf "$VIRTUAL"
-elif [ "--lint" == "$1" ]; then
+elif [ "--lint" = "$1" ]; then
 	# Lint
 	shift
 	echo "$@"
 	create_env_test
-	. "$TESTENV/bin/activate"
+	. "./$TESTENV/bin/activate"
 	flake8 \
 		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV}
-elif [ "--test" == "$1" ]; then
+elif [ "--test" = "$1" ]; then
 	# Test
 	shift
 	create_env_test
-	. "$TESTENV/bin/activate"
+	. "./$TESTENV/bin/activate"
 	pytest --doctest-modules "$@"
-elif [ "--format" == "$1" ]; then
+elif [ "--format" = "$1" ]; then
 	# Reformat code
 	shift
 	create_env_test
-	. "$TESTENV/bin/activate"
+	. "./$TESTENV/bin/activate"
 	autopep8 --verbose --in-place --recursive --aggressive \
 		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV} \
 		"$@"
 else
 	create_env
-	. "$VIRTUAL/bin/activate"
-	$PYTHON "${@:1}"
+	. "./$VIRTUAL/bin/activate"
+	$PYTHON "$@"
 fi
