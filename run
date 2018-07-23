@@ -55,37 +55,46 @@ fi
 # these steps are done for the virtual env regardless
 create_env() {
 	if [ ! -d "$VIRTUAL" ]; then
+        echo "Installing virtualenv for $VIRTUAL" | tee -a "${RUNLOG}"
+        echo "virtualenv -p $PYTHON $VIRTUAL"
 		virtualenv -p $PYTHON "$VIRTUAL" 2>&1 | tee -a "${RUNLOG}"
 	fi
 	. "./$VIRTUAL/bin/activate"
 	# Always try to install, in case user edited requirements
-	$PIP install -r requirements.txt 2>&1 \
+	$PIP install -r "requirements.txt" 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
 	# Always freeze after install so user can see what is added
 	# Also, freeze to a different file so we don't overwrite user's
 	# requirements.txt
 	$PIP freeze > requirements.freeze
+    . "./$VIRTUAL/bin/activate"
 }
 
 create_env_test() {
 	if [ ! -d "$TESTENV" ]; then
 		# When creating the virutalenv, show all pip install steps in the
 		# terminal, not just in log
+        echo "Installing virtualenv for $TESTENV" | tee -a "${RUNLOG}"
+		echo "virtualenv -p $PYTHON $TESTENV"
 		virtualenv -p $PYTHON "$TESTENV" 2>&1 | tee -a "${RUNLOG}"
 	fi
 	. "./$TESTENV/bin/activate"
 	$PIP install flake8 autopep8 pytest 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
-	$PIP install -r requirements.txt 2>&1 \
+	$PIP install -r "requirements.txt" 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
-	. "./$TESTENV/bin/activate"
+    if [ -f "requirements.test" ]; then
+        $PIP install -r "requirements.test" 2>&1 \
+            | tee -a "${RUNLOG}" \
+            | grep -v "Requirement already satisfied:" | cat
+    fi
+    . "./$TESTENV/bin/activate"
 }
 
 # Export environment variables if they exist
-#TODO: This may not be necessary, since some people use dotenv
 set -a
 if [ -f "./.env" ]; then
 	. "./.env"
@@ -93,7 +102,6 @@ fi
 set +a
 
 # Add current dir to python path
-#TODO: I don't remember why...
 CWD=$(pwd)
 export PYTHONPATH="$CWD:$PYTHONPATH"
 
@@ -124,6 +132,23 @@ elif [ "--format" = "$1" ]; then
 	autopep8 --verbose --in-place --recursive --aggressive \
 		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV} \
 		"$@"
+elif [ "--ci" = "$1" ]; then
+	shift
+	create_env_test
+	. "./$TESTENV/bin/activate"
+	flake8 \
+		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV}
+	pytest --doctest-modules
+elif [ "--all" = "$1" ]; then
+	shift
+	create_env_test
+	. "./$TESTENV/bin/activate"
+	autopep8 --verbose --in-place --recursive --aggressive \
+		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV} \
+		./
+	flake8 \
+		--exclude .git,__pycache__,docs/source/conf.py,old,build,dist,${VIRTUAL},${TESTENV}
+	pytest --doctest-modules
 else
 	create_env
 	. "./$VIRTUAL/bin/activate"
