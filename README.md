@@ -1,5 +1,6 @@
 # virtuous-python
-This is a tool for writing python virtuously. Support linting, testing, deploying and good maintenance.
+This is a tool for writing python virtuously. Support linting, testing, deploying 
+and good maintenance.
 
 ## What is this?
 
@@ -10,12 +11,14 @@ I had just come back to python after not using it for a while, and I was
 annoyed wiith having to set up a virtualenv and activate it for each project.
 So I wrote a script to make that easier. Mostly because I didn't want to have
 to remember the steps and commands, and I didn't want to have to remember to
-pip install or freeze my requirements.
+pip install or freeze my requirements. (Edit: no longer using pip freeze!)
 
 This script is like a cross between a wrapper and a makefile. It runs your
 program, but it also creates, activates and cleans up a virtualenv around it.
 It can run a linter, test suite, and auto-format your code as well. And it can
-be used to run things in production.
+be used to run things in production. (I recommend Docker instead though.)
+
+You can use this in your CI pipeline to run lint and tests for every branch!
 
 ## How to use it (in a hurry):
 
@@ -49,7 +52,7 @@ The `run` script has some options which help you write clean code.
 * Manages your virtualenv directories for the project so you don't have to.
 * Provides built-in configuration for flake8 (lint) and pytest.
 * Creates a `.gitignore` for python if you don't already have one.
-* Automatically installs and freezes your requirements.
+* Automatically installs your requirements and updates your `requirements.txt`.
 
 ## How I use it:
 
@@ -61,10 +64,18 @@ follow these steps:
    don't have to think about that stuff. I see my code is working or I find a
    bug which I need to fix.
 2. Write code to fix a bug or add a feature.
-3. Add tests to the code.
+3. Add pytest doctests in the code.
 4. `./run --test` - Run all my tests, and see if they pass or fail. Fix and
    repeat.
 5. `./run --format . && ./run --lint` - Then I fix any lint warnings. Repeat
    until there are no more warnings.
 6. Repeat until happy.
-7. Commmit code, requirements.txt, and requirements.freeze to git.
+7. Commmit all code and requirements.txt to git.
+
+## Try it out
+
+Just clone this repo and run with it.
+
+1. Clone this repo
+2. `./run --test`
+

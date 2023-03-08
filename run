@@ -16,9 +16,7 @@
 # die on errors
 set -e
 
-# set VER="3" for python3, or empty for 2.7
-#TODO: get a value for this from an external environment variable?
-# I don't want to support python<3 ever again
+# Set 2 here if you ever need a python 2 environment. I sure hope not.
 VER="3"
 
 # everything is set up for the selected version
@@ -60,14 +58,15 @@ create_env() {
 		virtualenv -p $PYTHON "$VIRTUAL" 2>&1 | tee -a "${RUNLOG}"
 	fi
 	. "./$VIRTUAL/bin/activate"
+	# Update requirements.text in case we changed something.
+	$PIP install pipreqs 2>&1 \
+		| tee -a "${RUNLOG}" \
+		| grep -v "Requirement already satisfied:" | cat
+	pipreqs --ignore "${VIRTUAL},${TESTENV}" --force ./
 	# Always try to install, in case user edited requirements
 	$PIP install -r "requirements.txt" 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
-	# Always freeze after install so user can see what is added
-	# Also, freeze to a different file so we don't overwrite user's
-	# requirements.txt
-	$PIP freeze > requirements.freeze
     . "./$VIRTUAL/bin/activate"
 }
 
@@ -80,9 +79,10 @@ create_env_test() {
 		virtualenv -p $PYTHON "$TESTENV" 2>&1 | tee -a "${RUNLOG}"
 	fi
 	. "./$TESTENV/bin/activate"
-	$PIP install flake8 autopep8 pytest 2>&1 \
+	$PIP install pipreqs flake8 autopep8 pytest 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
+	pipreqs --ignore "${VIRTUAL},${TESTENV}" --force ./
 	$PIP install -r "requirements.txt" 2>&1 \
 		| tee -a "${RUNLOG}" \
 		| grep -v "Requirement already satisfied:" | cat
@@ -110,6 +110,12 @@ if [ "--clean" = "$1" ]; then
 	# remove virtualenv directories
 	rm -rf "$TESTENV"
 	rm -rf "$VIRTUAL"
+elif [ "--cleanAll" = "$1" ]; then
+	# remove virtualenv directories
+	rm -rf "$TESTENV"
+	rm -rf "$VIRTUAL"
+	rm -rf "./__pycache__"
+	rm -rf "./.pytest_cache"
 elif [ "--lint" = "$1" ]; then
 	# Lint
 	shift
